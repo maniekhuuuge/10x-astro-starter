@@ -1,0 +1,11 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import AIGenerationView from '../../components/flashcards/AIGenerationView';
+---
+
+<Layout title="Generuj fiszki z AI">
+  <div class="container py-8">
+    <h1 class="text-3xl font-bold mb-6">Generuj fiszki z AI</h1>
+    <AIGenerationView client:load />
+  </div>
+</Layout> 

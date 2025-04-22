@@ -315,17 +315,8 @@ const FlashcardsListView = () => {
   // Render loading state
   if (state.isLoading && state.flashcards.length === 0) {
     return (
-      <div className="space-y-6">
-        {/* Filters */}
-        <FlashcardFilters
-          filters={state.filters}
-          onFilterChange={handleFilterChange}
-          onSortChange={handleSortChange}
-        />
-        
-        <div className="flex items-center justify-center min-h-[300px]">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-        </div>
+      <div className="flex items-center justify-center min-h-[300px]">
+        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
       </div>
     );
   }
@@ -333,29 +324,33 @@ const FlashcardsListView = () => {
   // Render error state
   if (state.error && state.flashcards.length === 0) {
     return (
-      <div className="space-y-6">
-        {/* Filters */}
-        <FlashcardFilters
-          filters={state.filters}
-          onFilterChange={handleFilterChange}
-          onSortChange={handleSortChange}
-        />
-        
-        <div className="bg-destructive/15 p-4 rounded-md text-destructive">
-          <h3 className="font-bold mb-2">Wystąpił błąd podczas ładowania fiszek</h3>
-          <p className="mb-4">{state.error}</p>
-          <button
-            onClick={handleRetryFetch}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md"
-          >
-            Spróbuj ponownie
-          </button>
-        </div>
+      <div className="bg-destructive/15 p-4 rounded-md text-destructive">
+        <h3 className="font-bold mb-2">Wystąpił błąd podczas ładowania fiszek</h3>
+        <p className="mb-4">{state.error}</p>
+        <button
+          onClick={handleRetryFetch}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-md"
+        >
+          Spróbuj ponownie
+        </button>
       </div>
     );
   }
 
-  // Render main content with filters always visible
+  // Render empty state
+  if (state.flashcards.length === 0) {
+    return (
+      <div className="text-center p-8 border rounded-md">
+        <h3 className="font-bold mb-2 text-xl">Nie znaleziono fiszek</h3>
+        <p className="text-muted-foreground">
+          {state.filters.status || state.filters.method
+            ? "Brak fiszek spełniających wybrane kryteria. Zmień filtry i spróbuj ponownie."
+            : "Nie masz jeszcze żadnych fiszek. Utwórz nową!"}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Filters */}
@@ -365,32 +360,18 @@ const FlashcardsListView = () => {
         onSortChange={handleSortChange}
       />
 
-      {/* Conditional content based on flashcards availability */}
-      {state.flashcards.length === 0 ? (
-        <div className="text-center p-8 border rounded-md">
-          <h3 className="font-bold mb-2 text-xl">Nie znaleziono fiszek</h3>
-          <p className="text-muted-foreground">
-            {state.filters.status || state.filters.method
-              ? "Brak fiszek spełniających wybrane kryteria. Zmień filtry i spróbuj ponownie."
-              : "Nie masz jeszcze żadnych fiszek. Utwórz nową!"}
-          </p>
-        </div>
-      ) : (
-        <>
-          {/* Table */}
-          <FlashcardTable
-            flashcards={state.flashcards}
-            onEdit={handleOpenEditModal}
-            onDelete={handleOpenDeleteModal}
-          />
+      {/* Table */}
+      <FlashcardTable
+        flashcards={state.flashcards}
+        onEdit={handleOpenEditModal}
+        onDelete={handleOpenDeleteModal}
+      />
 
-          {/* Pagination */}
-          <PaginationControls
-            pagination={state.pagination}
-            onPageChange={handlePageChange}
-          />
-        </>
-      )}
+      {/* Pagination */}
+      <PaginationControls
+        pagination={state.pagination}
+        onPageChange={handlePageChange}
+      />
 
       {/* Edit Modal */}
       <EditFlashcardModal

@@ -1,0 +1,11 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ManualFlashcardCreateView from '../../components/flashcards/ManualFlashcardCreateView';
+---
+
+<Layout title="Utwórz fiszkę">
+  <div class="container py-8">
+    <h1 class="text-3xl font-bold mb-6">Utwórz fiszkę manualnie</h1>
+    <ManualFlashcardCreateView client:load />
+  </div>
+</Layout> 

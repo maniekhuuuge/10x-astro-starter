@@ -5,6 +5,15 @@ import { ErrorLogger } from '../../utils/error-logger';
 import type { CreateFlashcardCommand, FlashcardDTO } from '../../types';
 import { createHash } from 'crypto';
 
+// Rozszerzony interfejs dla requestu
+interface ExtendedCreateFlashcardCommand extends CreateFlashcardCommand {
+  status_recenzji?: 'pending' | 'accepted' | 'rejected';
+}
+
+// Typy dla wartości w bazie danych
+type DbMethod = 'ai' | 'manual';
+type DbStatus = 'pending' | 'accepted' | 'rejected';
+
 /**
  * @api {post} /api/flashcards Create flashcards
  * @apiName CreateFlashcards
@@ -36,18 +45,37 @@ export const POST: APIRoute = async ({ request }) => {
     
     // Prepare flashcards for insertion with correct type constraints
     const flashcardRecords = flashcardsToCreate.map(flashcard => {
+      // Sprawdzamy, czy mamy rozszerzone dane z polem status_recenzji
+      const extendedFlashcard = flashcard as ExtendedCreateFlashcardCommand;
+      
       // Generate a unique identifier using MD5
       const timestamp = new Date().toISOString();
       const uniqueString = `${userId}${flashcard.front}${flashcard.back}${timestamp}`;
       const uuid = createHash('md5').update(uniqueString).digest('hex');
+      
+      // Określamy status_recenzji: dla manualnie utworzonych 'accepted', 
+      // dla AI 'pending', lub używamy przesłanej wartości
+      let status: DbStatus = 'pending';
+      
+      // Jeśli podano status_recenzji w zapytaniu, używamy go
+      if (extendedFlashcard.status_recenzji && 
+          ['pending', 'accepted', 'rejected'].includes(extendedFlashcard.status_recenzji)) {
+        status = extendedFlashcard.status_recenzji as DbStatus;
+      }
+      // Domyślnie dla metody 'manual' ustawiamy status 'accepted'
+      else if (flashcard.metoda_tworzna === 'manual') {
+        status = 'accepted';
+      }
+      
+      const method: DbMethod = flashcard.metoda_tworzna === 'AI' ? 'ai' : 'manual';
       
       return {
         uuid,
         user_id: userId,
         przód: flashcard.front,
         tył: flashcard.back,
-        metoda_tworzna: flashcard.metoda_tworzna === 'AI' ? 'ai' as const : 'manual' as const,
-        status_recenzji: 'pending' as const,
+        metoda_tworzna: method,
+        status_recenzji: status,
       };
     });
     
