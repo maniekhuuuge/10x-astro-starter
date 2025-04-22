@@ -1,0 +1,11 @@
+---
+import MainLayout from "../layouts/Layout.astro";
+import FlashcardsListView from "../components/flashcards/FlashcardsListView";
+---
+
+<MainLayout title="Fiszki - Lista">
+  <div class="container py-8">
+    <h1 class="text-3xl font-bold mb-6">Twoje fiszki</h1>
+    <FlashcardsListView client:load />
+  </div>
+</MainLayout> 
