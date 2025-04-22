@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Default user ID for development
-export const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000000';
+export const DEFAULT_USER_ID = '55c1b9ca-5035-4cbc-b79d-1e0aa5e88c8a';
 
 // Get the Supabase URL and key from environment variables
 const supabaseUrl = import.meta.env.SUPABASE_URL;
