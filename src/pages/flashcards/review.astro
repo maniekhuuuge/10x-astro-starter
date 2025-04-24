@@ -1,0 +1,11 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro';
+import FlashcardReviewList from '@/components/flashcards/FlashcardReviewList';
+---
+
+<MainLayout title="Review AI Flashcards">
+  <h1 class="text-3xl font-bold mb-6">Review AI Flashcards</h1>
+  <div id="flashcard-review-container">
+    <FlashcardReviewList client:load />
+  </div>
+</MainLayout> 

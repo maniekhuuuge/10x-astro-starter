@@ -1,0 +1,31 @@
+---
+import '@/styles/globals.css';
+import SideNav from '@/components/navigation/SideNav';
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title} | 10x Flashcards</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="min-h-screen bg-background antialiased">
+    <div class="flex">
+      <SideNav client:load />
+      
+      <div class="flex-1 overflow-auto">
+        <main class="container py-8 px-4">
+          <slot />
+        </main>
+      </div>
+    </div>
+  </body>
+</html> 

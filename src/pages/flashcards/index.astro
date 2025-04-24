@@ -1,0 +1,63 @@
+---
+import MainLayout from '@/layouts/MainLayout.astro';
+import { ClipboardCheck } from 'lucide-react';
+---
+
+<MainLayout title="My Flashcards">
+  <!-- Large, prominent review banner -->
+  <div class="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-lg shadow-sm">
+    <div class="flex flex-col md:flex-row items-center justify-between">
+      <div class="mb-4 md:mb-0">
+        <h2 class="text-lg font-bold text-blue-700">AI-Generated Flashcards Need Your Review</h2>
+        <p class="text-blue-600">3 flashcards are waiting for your approval</p>
+      </div>
+      <a 
+        href="/flashcards/review" 
+        class="w-full md:w-auto px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 font-medium"
+      >
+        <ClipboardCheck className="h-5 w-5" />
+        <span>Go to Review Page</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="mb-8 flex items-center justify-between">
+    <h1 class="text-3xl font-bold">My Flashcards</h1>
+    
+    <div class="flex gap-2">
+      <a 
+        href="/flashcards/review" 
+        class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+      >
+        <ClipboardCheck className="h-5 w-5" />
+        <span>Review Flashcards</span>
+        <span class="inline-flex items-center justify-center bg-white text-blue-600 h-5 min-w-5 px-1 rounded-full text-xs font-semibold">3</span>
+      </a>
+      
+      <a 
+        href="/flashcards/create" 
+        class="px-4 py-2 bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 transition-colors"
+      >
+        Create New
+      </a>
+    </div>
+  </div>
+  
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <!-- Example flashcard cards would go here -->
+    <div class="border rounded-lg p-4 bg-white">
+      <div class="font-medium mb-2">What is React?</div>
+      <div class="text-gray-500 text-sm">A JavaScript library for building user interfaces</div>
+    </div>
+    
+    <div class="border rounded-lg p-4 bg-white">
+      <div class="font-medium mb-2">What is TypeScript?</div>
+      <div class="text-gray-500 text-sm">A strongly typed programming language that builds on JavaScript</div>
+    </div>
+    
+    <div class="border rounded-lg p-4 bg-white">
+      <div class="font-medium mb-2">What is Astro?</div>
+      <div class="text-gray-500 text-sm">A web framework for content-driven websites</div>
+    </div>
+  </div>
+</MainLayout> 
