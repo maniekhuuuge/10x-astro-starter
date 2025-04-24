@@ -25,27 +25,76 @@ const FlashcardReviewList: React.FC = () => {
     const fetchFlashcards = async () => {
       try {
         setLoading(true);
-        // Let's try a simpler approach to isolate the issue
-        const response = await fetch('/api/flashcards');
+        
+        // Prepare request details
+        const url = '/api/flashcards';
+        const method = 'GET';
+        const headers = {};
+        
+        // Log equivalent curl command
+        console.log('%c 🔍 API Request Details', 'background: #3498db; color: white; font-size: 12px; padding: 4px;');
+        console.log(`Fetching flashcards with equivalent curl:`);
+        console.log(`curl -X ${method} "${window.location.origin}${url}"`);
+        
+        // Make the request
+        console.time('API Request Time');
+        const response = await fetch(url, { method, headers });
+        console.timeEnd('API Request Time');
+        console.log('Response status:', response.status);
+        console.log('Response headers:', Object.fromEntries([...response.headers.entries()]));
         
         if (!response.ok) {
           const errorText = await response.text();
+          console.error('Error response body:', errorText);
+          try {
+            // Try to parse as JSON to see if there's structured error info
+            const errorJson = JSON.parse(errorText);
+            console.error('Parsed error JSON:', errorJson);
+          } catch (e) {
+            // Not JSON, continue with text error
+          }
           throw new Error(`Error ${response.status}: Failed to load flashcards for review. ${errorText}`);
         }
         
+        const responseClone = response.clone();
+        const rawText = await responseClone.text();
+        console.log('Raw response text:', rawText);
+        
         const data = await response.json();
+        console.log('%c 📋 API Response Data', 'background: #2ecc71; color: white; font-size: 12px; padding: 4px;');
+        console.log(JSON.stringify(data, null, 2));
+        console.log('Items count:', data.data ? data.data.length : 0);
+        
+        if (data.data && data.data.length > 0) {
+          console.log('First item example:', JSON.stringify(data.data[0], null, 2));
+        } else {
+          console.warn('No items returned from API');
+        }
         
         // Filter the results in the client-side instead
-        const filteredFlashcards = (data.items || []).filter((card: FlashcardDTO) => 
-          (card.status.toLowerCase() === 'pending') && 
-          card.method === 'ai'
-        );
+        console.log('%c 🔍 Filtering Flashcards', 'background: #f39c12; color: white; font-size: 12px; padding: 4px;');
+        const filteredFlashcards = (data.data || []).filter((card: FlashcardDTO) => {
+          console.log('Card details:', JSON.stringify(card, null, 2));
+          console.log('Card status check:', {
+            uuid: card.uuid,
+            status: card.status,
+            method: card.method,
+            statusLowerCase: card.status?.toLowerCase(),
+            matchesPending: card.status?.toLowerCase() === 'pending'
+          });
+          return (card.status?.toLowerCase() === 'pending');
+          /*&& card.method === 'ai'*/
+        });
+        
+        console.log('Filtered flashcards count:', filteredFlashcards.length);
+        console.log('Filtered flashcards:', JSON.stringify(filteredFlashcards, null, 2));
         
         setFlashcards(filteredFlashcards);
         setError(null);
       } catch (err) {
+        console.error('%c ❌ Error in fetchFlashcards', 'background: #e74c3c; color: white; font-size: 12px; padding: 4px;');
+        console.error(err);
         setError(err instanceof Error ? err.message : 'Failed to load flashcards');
-        console.error('Error fetching flashcards:', err);
       } finally {
         setLoading(false);
       }
@@ -56,17 +105,49 @@ const FlashcardReviewList: React.FC = () => {
   
   const handleAccept = async (id: string) => {
     try {
-      const response = await fetch(`/api/flashcards/${id}/review`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ action: 'accept' }),
+      // Prepare request details
+      const url = `/api/flashcards/${id}/review`;
+      const method = 'POST';
+      const headers = { 'Content-Type': 'application/json' };
+      const body = JSON.stringify({ action: 'accept' });
+      
+      // Log equivalent curl command
+      console.log('%c 🔄 Accept Flashcard Request', 'background: #3498db; color: white; font-size: 12px; padding: 4px;');
+      console.log(`Accepting flashcard with equivalent curl:`);
+      console.log(`curl -X ${method} "${window.location.origin}${url}" \\
+  -H "Content-Type: application/json" \\
+  -d '${body}'`);
+      
+      // Make the request
+      console.time('Accept Request Time');
+      const response = await fetch(url, { 
+        method, 
+        headers, 
+        body 
       });
+      console.timeEnd('Accept Request Time');
+      console.log('Accept response status:', response.status);
+      console.log('Accept response headers:', Object.fromEntries([...response.headers.entries()]));
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error accepting flashcard - response:', errorText);
+        try {
+          // Try to parse as JSON to see if there's structured error info
+          const errorJson = JSON.parse(errorText);
+          console.error('Parsed error JSON:', errorJson);
+        } catch (e) {
+          // Not JSON, continue with text error
+        }
         throw new Error(`Error ${response.status}: Failed to accept flashcard`);
       }
+      
+      const responseClone = response.clone();
+      const rawText = await responseClone.text();
+      console.log('Raw accept response text:', rawText);
+      
+      const data = await response.json();
+      console.log('Accept response data:', JSON.stringify(data, null, 2));
       
       // Remove the flashcard from the list
       setFlashcards((prev) => prev.filter((flashcard) => flashcard.uuid !== id));
@@ -86,17 +167,34 @@ const FlashcardReviewList: React.FC = () => {
   
   const handleReject = async (id: string) => {
     try {
-      const response = await fetch(`/api/flashcards/${id}/review`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ action: 'reject' }),
+      // Prepare request details
+      const url = `/api/flashcards/${id}/review`;
+      const method = 'POST';
+      const headers = { 'Content-Type': 'application/json' };
+      const body = JSON.stringify({ action: 'reject' });
+      
+      // Log equivalent curl command
+      console.log('%c 🚫 Reject Flashcard Request', 'background: #e74c3c; color: white; font-size: 12px; padding: 4px;');
+      console.log(`Rejecting flashcard with equivalent curl:`);
+      console.log(`curl -X ${method} "${window.location.origin}${url}" \\
+  -H "Content-Type: application/json" \\
+  -d '${body}'`);
+      
+      const response = await fetch(url, {
+        method,
+        headers,
+        body
       });
+      console.log('Reject response status:', response.status);
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error rejecting flashcard - response:', errorText);
         throw new Error(`Error ${response.status}: Failed to reject flashcard`);
       }
+      
+      const responseData = await response.json();
+      console.log('Reject response data:', JSON.stringify(responseData, null, 2));
       
       // Remove the flashcard from the list
       setFlashcards((prev) => prev.filter((flashcard) => flashcard.uuid !== id));
@@ -121,23 +219,40 @@ const FlashcardReviewList: React.FC = () => {
     });
   };
   
-  const handleSaveEdit = async (id: string, data: { front: string; back: string }) => {
+  const handleSaveEdit = async (id: string, formData: { front: string; back: string }) => {
     try {
-      const response = await fetch(`/api/flashcards/${id}/review`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'edit',
-          front: data.front,
-          back: data.back,
-        }),
+      // Prepare request details
+      const url = `/api/flashcards/${id}/review`;
+      const method = 'POST';
+      const headers = { 'Content-Type': 'application/json' };
+      const body = JSON.stringify({
+        action: 'edit',
+        front: formData.front,
+        back: formData.back,
       });
       
+      // Log equivalent curl command
+      console.log('%c ✏️ Edit Flashcard Request', 'background: #9b59b6; color: white; font-size: 12px; padding: 4px;');
+      console.log(`Editing flashcard with equivalent curl:`);
+      console.log(`curl -X ${method} "${window.location.origin}${url}" \\
+  -H "Content-Type: application/json" \\
+  -d '${body}'`);
+      
+      const response = await fetch(url, {
+        method,
+        headers,
+        body
+      });
+      console.log('Edit response status:', response.status);
+      
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error editing flashcard - response:', errorText);
         throw new Error(`Error ${response.status}: Failed to edit flashcard`);
       }
+      
+      const responseData = await response.json();
+      console.log('Edit response data:', JSON.stringify(responseData, null, 2));
       
       // Remove the flashcard from the list and close the modal
       setFlashcards((prev) => prev.filter((flashcard) => flashcard.uuid !== id));
