@@ -339,9 +339,14 @@ const FlashcardReviewList: React.FC = () => {
     return (
       <div className="text-center p-8 border rounded-md">
         <h3 className="font-bold mb-2 text-xl">Brak fiszek do recenzji</h3>
-        <p className="text-muted-foreground">
+        <p className="text-muted-foreground mb-4">
           Aktualnie nie ma żadnych fiszek oczekujących na recenzję.
         </p>
+        <a href="/flashcards">
+          <Button variant="outline">
+            Wróć do listy fiszek
+          </Button>
+        </a>
       </div>
     );
   }
