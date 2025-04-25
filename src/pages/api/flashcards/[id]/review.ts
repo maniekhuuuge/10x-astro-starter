@@ -1,37 +1,7 @@
 import type { APIRoute } from 'astro';
-import type { FlashcardDTO, FlashcardReviewCommand } from '@/types/flashcards';
-
-// This would connect to your actual database in a real implementation
-// Updated with "oczekujący" status to match what's shown in the main view
-const mockFlashcards: FlashcardDTO[] = [
-  {
-    uuid: '1',
-    userId: 'user1',
-    createdAt: new Date().toISOString(),
-    front: 'What is React?',
-    back: 'A JavaScript library for building user interfaces',
-    method: 'ai',
-    status: 'oczekujący' // Changed from 'pending' to 'oczekujący'
-  },
-  {
-    uuid: '2',
-    userId: 'user1',
-    createdAt: new Date().toISOString(),
-    front: 'What is TypeScript?',
-    back: 'A strongly typed programming language that builds on JavaScript',
-    method: 'ai',
-    status: 'oczekujący' // Changed from 'pending' to 'oczekujący'
-  },
-  {
-    uuid: '3',
-    userId: 'user1',
-    createdAt: new Date().toISOString(),
-    front: 'What is Astro?',
-    back: 'A web framework for content-driven websites',
-    method: 'ai',
-    status: 'oczekujący' // Changed from 'pending' to 'oczekujący'
-  }
-];
+import type { FlashcardReviewCommand, FlashcardDTO } from '@/types/flashcards';
+import { supabaseClient, DEFAULT_USER_ID } from '../../../../services/supabase';
+import { ErrorLogger } from '../../../../utils/error-logger';
 
 export const POST: APIRoute = async ({ request, params }) => {
   try {
@@ -46,29 +16,10 @@ export const POST: APIRoute = async ({ request, params }) => {
       });
     }
     
-    // Find the flashcard
-    const flashcardIndex = mockFlashcards.findIndex(card => card.uuid === flashcardId);
+    // Use DEFAULT_USER_ID for development
+    const userId = DEFAULT_USER_ID;
     
-    if (flashcardIndex === -1) {
-      return new Response(JSON.stringify({ error: 'Flashcard not found' }), {
-        status: 404,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-    }
-    
-    // Check if flashcard is already reviewed - handle both 'pending' and 'oczekujący'
-    if (mockFlashcards[flashcardIndex].status !== 'pending' && mockFlashcards[flashcardIndex].status !== 'oczekujący') {
-      return new Response(JSON.stringify({ error: 'Flashcard has already been reviewed' }), {
-        status: 409,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-    }
-    
-    // Parse the request body
+    // Parse the request body first
     const reviewCommand: FlashcardReviewCommand = await request.json();
     
     if (!reviewCommand.action) {
@@ -80,17 +31,75 @@ export const POST: APIRoute = async ({ request, params }) => {
       });
     }
     
-    // Clone the flashcard to avoid mutating the original
-    const updatedFlashcard: FlashcardDTO = { ...mockFlashcards[flashcardIndex] };
+    // Query the database for the specific flashcard
+    const { data: flashcard, error: fetchError } = await supabaseClient
+      .from('flashcards')
+      .select('*')
+      .eq('uuid', flashcardId)
+      .eq('user_id', userId)
+      .single();
     
-    // Process the action
+    if (fetchError) {
+      // If the error is "not found", return 404
+      if (fetchError.code === 'PGRST116') {
+        return new Response(JSON.stringify({ error: 'Flashcard not found' }), {
+          status: 404,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+      
+      ErrorLogger.logDatabaseError('select_by_id', fetchError, {
+        table: 'flashcards',
+        uuid: flashcardId
+      });
+      
+      return new Response(JSON.stringify({ error: 'Failed to fetch flashcard' }), {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+    
+    if (!flashcard) {
+      return new Response(JSON.stringify({ error: 'Flashcard not found' }), {
+        status: 404,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+    
+    // Skip status check for edit actions
+    if (reviewCommand.action !== 'edit') {
+      // Check if flashcard is already reviewed - handle both 'pending' and 'oczekujący'
+      const currentStatus = flashcard.status_recenzji?.toLowerCase();
+      if (currentStatus !== 'pending' && currentStatus !== 'oczekujący') {
+        return new Response(JSON.stringify({ error: 'Flashcard has already been reviewed' }), {
+          status: 409,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+    }
+    
+    // Prepare the update data based on the action
+    let updateRecord: any = {};
+    
     switch (reviewCommand.action) {
       case 'accept':
-        updatedFlashcard.status = 'accepted';
+        updateRecord = {
+          status_recenzji: 'accepted'
+        };
         break;
         
       case 'reject':
-        updatedFlashcard.status = 'rejected';
+        updateRecord = {
+          status_recenzji: 'rejected'
+        };
         break;
         
       case 'edit':
@@ -104,10 +113,31 @@ export const POST: APIRoute = async ({ request, params }) => {
           });
         }
         
+        // Length validation
+        if (reviewCommand.front.length > 200) {
+          return new Response(JSON.stringify({ error: 'Front text must be at most 200 characters' }), {
+            status: 400,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+        }
+        
+        if (reviewCommand.back.length > 500) {
+          return new Response(JSON.stringify({ error: 'Back text must be at most 500 characters' }), {
+            status: 400,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+        }
+        
         // Update flashcard content and status
-        updatedFlashcard.front = reviewCommand.front;
-        updatedFlashcard.back = reviewCommand.back;
-        updatedFlashcard.status = 'accepted';
+        updateRecord = {
+          przód: reviewCommand.front,
+          tył: reviewCommand.back,
+          status_recenzji: 'accepted'
+        };
         break;
         
       default:
@@ -119,10 +149,43 @@ export const POST: APIRoute = async ({ request, params }) => {
         });
     }
     
-    // In a real implementation, you would update the database here
-    mockFlashcards[flashcardIndex] = updatedFlashcard;
+    // Update the flashcard in the database
+    const { data: updatedFlashcard, error: updateError } = await supabaseClient
+      .from('flashcards')
+      .update(updateRecord)
+      .eq('uuid', flashcardId)
+      .eq('user_id', userId)
+      .select()
+      .single();
     
-    return new Response(JSON.stringify(updatedFlashcard), {
+    if (updateError) {
+      ErrorLogger.logDatabaseError('update', updateError, {
+        table: 'flashcards',
+        uuid: flashcardId,
+        updateRecord
+      });
+      
+      return new Response(JSON.stringify({ error: 'Failed to update flashcard' }), {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+    
+    // Map database record to DTO
+    const updatedFlashcardDTO: FlashcardDTO = {
+      uuid: updatedFlashcard.uuid,
+      userId: updatedFlashcard.user_id,
+      createdAt: updatedFlashcard.created_at,
+      generationId: updatedFlashcard.generation_id,
+      front: updatedFlashcard.przód,
+      back: updatedFlashcard.tył,
+      method: updatedFlashcard.metoda_tworzna,
+      status: updatedFlashcard.status_recenzji,
+    };
+    
+    return new Response(JSON.stringify(updatedFlashcardDTO), {
       status: 200,
       headers: {
         'Content-Type': 'application/json'
@@ -130,6 +193,11 @@ export const POST: APIRoute = async ({ request, params }) => {
     });
   } catch (error) {
     console.error('Error handling request:', error);
+    ErrorLogger.logError(error, { 
+      endpoint: `POST /flashcards/:id/review`, 
+      id: params.id 
+    });
+    
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
       headers: {

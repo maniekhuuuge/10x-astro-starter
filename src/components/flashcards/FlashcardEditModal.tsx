@@ -37,6 +37,15 @@ const FlashcardEditModal: React.FC<FlashcardEditModalProps> = ({
   });
   const [isSaving, setIsSaving] = useState(false);
 
+  // Add useEffect to log rendering based on isOpen
+  useEffect(() => {
+    if (isOpen) {
+      console.log('[FlashcardEditModal] Rendering because isOpen is true. Flashcard:', flashcard?.uuid);
+    } else {
+      console.log('[FlashcardEditModal] Not rendering or closing because isOpen is false.');
+    }
+  }, [isOpen, flashcard]);
+
   // Reset form when flashcard changes
   useEffect(() => {
     if (flashcard) {
