@@ -133,11 +133,20 @@ export class OpenRouterService {
    * @throws {Error} If OpenRouter API key is not configured
    */
   constructor() {
+    console.log('🔄 OpenRouterService: Constructor called');
+    
+    // Log all environment variables (excluding sensitive values)
+    console.log('🔄 OpenRouterService: Environment variables check');
+    console.log('OPENROUTER_API_KEY present:', !!import.meta.env.OPENROUTER_API_KEY);
+    console.log('PUBLIC_OPENROUTER_API_KEY present:', !!import.meta.env.PUBLIC_OPENROUTER_API_KEY);
+    console.log('APP_URL present:', !!import.meta.env.APP_URL);
+    console.log('PUBLIC_APP_URL present:', !!import.meta.env.PUBLIC_APP_URL);
+    console.log('APP_TITLE present:', !!import.meta.env.APP_TITLE);
+    console.log('PUBLIC_APP_TITLE present:', !!import.meta.env.PUBLIC_APP_TITLE);
+    
     // In Astro, we need to use import.meta.env pattern for environment variables
-    // Adding direct access to the key from .env as a last resort
     const apiKey = import.meta.env.OPENROUTER_API_KEY || 
-                   import.meta.env.PUBLIC_OPENROUTER_API_KEY || 
-                   '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';
+                   import.meta.env.PUBLIC_OPENROUTER_API_KEY;
                    
     const referer = import.meta.env.APP_URL || 
                     import.meta.env.PUBLIC_APP_URL || 
@@ -148,10 +157,13 @@ export class OpenRouterService {
                   '10x App';
 
     if (!apiKey) {
-      throw new Error('OpenRouter API key is not configured.');
+      console.error('❌ OpenRouterService: API key not found in environment variables');
+      throw new Error('OpenRouter API key is not configured. Please add OPENROUTER_API_KEY to your .env file.');
     }
 
-    console.log('OpenRouter API Key available:', !!apiKey);
+    console.log('✅ OpenRouterService: API Key available:', !!apiKey);
+    console.log('✅ OpenRouterService: Using referer:', referer);
+    console.log('✅ OpenRouterService: Using title:', title);
 
     this.apiKey = apiKey;
     this.appReferer = referer;
@@ -245,10 +257,18 @@ export class OpenRouterService {
       'X-Title': this.appTitle
     };
 
+    console.log('🔄 OpenRouter Request: Endpoint:', endpoint);
+    console.log('🔄 OpenRouter Request: Headers (excluding auth):', {
+      ...headers,
+      'Authorization': this.apiKey ? 'Bearer [REDACTED]' : 'MISSING API KEY'
+    });
+    
     try {
       // Perform fetch with retry logic
+      console.log('🔄 OpenRouter Request: Sending request to:', url);
       return await this._fetchWithRetry(url, { ...options, headers });
     } catch (error) {
+      console.error('❌ OpenRouter Request: Network error:', error);
       if (error instanceof TypeError || error instanceof Error) {
         throw new NetworkError(`Network error while connecting to OpenRouter API: ${error.message}`);
       }
@@ -268,13 +288,17 @@ export class OpenRouterService {
    * @throws {ParsingError} If response parsing fails
    */
   private async _handleApiResponse<T>(response: Response): Promise<T> {
+    console.log('🔄 OpenRouter Response: Status code:', response.status);
+    
     try {
       const responseData = await response.json() as any;
-      console.log('✅ OpenRouter: Successfully parsed API response');
+      
+      // Log the first 500 chars of the response for debugging
+      console.log('🔄 OpenRouter Response: First 500 chars:', JSON.stringify(responseData).substring(0, 500));
       
       // Check for error object even when status is 200
       if (responseData.error) {
-        console.error(`❌ OpenRouter: Error in response with status ${response.status}:`, responseData.error);
+        console.error(`❌ OpenRouter Response: Error in response with status ${response.status}:`, responseData.error);
         
         // Handle payment/credit limits (usually code 402)
         // Check for various forms of token limit errors
@@ -283,8 +307,19 @@ export class OpenRouterService {
              (responseData.error.message.includes('more credits') || 
               responseData.error.message.includes('can only afford') ||
               responseData.error.message.includes('token limit')))) {
-          console.error('❌ OpenRouter: Credit limit exceeded:', responseData.error.message);
+          console.error('❌ OpenRouter Response: Credit limit exceeded:', responseData.error.message);
           throw new RateLimitError(`Credit limit exceeded: ${responseData.error.message}`);
+        }
+        
+        // Check for authentication errors
+        if (responseData.error.code === 401 || 
+            responseData.error.type === 'invalid_request_error' || 
+            (responseData.error.message && 
+             (responseData.error.message.includes('API key') || 
+              responseData.error.message.includes('authentication') ||
+              responseData.error.message.includes('authorized')))) {
+          console.error('❌ OpenRouter Response: Authentication error:', responseData.error.message);
+          throw new AuthenticationError(`Authentication error: ${responseData.error.message}`);
         }
         
         // Handle other errors embedded in a 200 response
@@ -294,43 +329,60 @@ export class OpenRouterService {
         );
       }
       
+      console.log('✅ OpenRouter Response: Successfully parsed API response');
+      
       // Validate the response structure for chat completion
       if (this.isChatCompletionResponse(responseData)) {
-        // Dump first 500 characters of the response for debugging
-        console.log('📦 Raw response from OpenRouter:', JSON.stringify(responseData).substring(0, 500) + '...');
-        
         // Validate that the response has the required structure
         if (!responseData.choices || !Array.isArray(responseData.choices) || responseData.choices.length === 0) {
-          console.error('❌ OpenRouter: Invalid response structure - missing choices array');
+          console.error('❌ OpenRouter Response: Invalid response structure - missing choices array');
           throw new ParsingError('Invalid response structure: missing choices array');
         }
         
         const firstChoice = responseData.choices[0];
         if (!firstChoice || typeof firstChoice !== 'object') {
-          console.error('❌ OpenRouter: Invalid response structure - first choice is invalid');
+          console.error('❌ OpenRouter Response: Invalid response structure - first choice is invalid');
           throw new ParsingError('Invalid response structure: first choice is invalid');
         }
         
         if (!firstChoice.message || typeof firstChoice.message !== 'object') {
-          console.error('❌ OpenRouter: Invalid response structure - message is missing or invalid');
+          console.error('❌ OpenRouter Response: Invalid response structure - message is missing or invalid');
           throw new ParsingError('Invalid response structure: message is missing or invalid');
         }
         
         if (typeof firstChoice.message.content !== 'string') {
-          console.error('❌ OpenRouter: Invalid response structure - content is not a string');
+          console.error('❌ OpenRouter Response: Invalid response structure - content is not a string');
           throw new ParsingError('Invalid response structure: content is not a string');
         }
         
-        console.log('✅ OpenRouter: Response structure validation passed');
+        console.log('✅ OpenRouter Response: Response structure validation passed');
       }
       
       return responseData as T;
     } catch (error) {
-      console.error('❌ OpenRouter: Failed to parse or validate API response', error);
+      console.error('❌ OpenRouter Response: Failed to parse or validate API response', error);
+      
+      // Check for non-JSON responses (usually auth errors)
+      if (error instanceof SyntaxError && response.status === 401) {
+        console.error('❌ OpenRouter Response: Authentication error (non-JSON response)');
+        throw new AuthenticationError('Authentication failed: Invalid API key');
+      }
       
       // Re-throw RateLimitError or OpenRouterApiError
       if (error instanceof RateLimitError || error instanceof OpenRouterApiError) {
         throw error;
+      }
+      
+      // Check HTTP status code for common errors
+      if (response.status === 401) {
+        console.error('❌ OpenRouter Response: Authentication error (status 401)');
+        throw new AuthenticationError('Authentication failed: Invalid API key');
+      } else if (response.status === 429) {
+        console.error('❌ OpenRouter Response: Rate limit exceeded (status 429)');
+        throw new RateLimitError('Rate limit exceeded');
+      } else if (response.status >= 500) {
+        console.error('❌ OpenRouter Response: Server error (status 5xx)');
+        throw new ServerError('OpenRouter server error');
       }
       
       throw new ParsingError(`Failed to parse API response: ${(error as Error).message}`);
