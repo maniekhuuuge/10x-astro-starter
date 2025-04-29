@@ -52,6 +52,7 @@ export interface FlashcardReviewCommand {
  */
 export interface FlashcardGenerateCommand {
   input: string;
+  model?: string; // Optional model selection - defaults to openai/gpt-4o if not provided
 }
 
 /**

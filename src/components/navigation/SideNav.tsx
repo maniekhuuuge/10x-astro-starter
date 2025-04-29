@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, BookOpen, ClipboardCheck } from 'lucide-react';
+import { Home, BookOpen, ClipboardCheck, MessageSquare } from 'lucide-react';
 
 /**
  * Simplified sidebar navigation with a link to the flashcard review page
@@ -26,6 +26,13 @@ const SideNav: React.FC = () => {
             3
           </span>
         </a>
+        
+        {/* OpenRouter Chat Demo Link */}
+        <NavItem 
+          href="/chat-demo" 
+          icon={<MessageSquare className="h-5 w-5 text-green-600" />} 
+          label="OpenRouter Chat Demo" 
+        />
       </nav>
     </div>
   );

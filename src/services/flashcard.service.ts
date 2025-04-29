@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 import { supabaseClient, DEFAULT_USER_ID } from '../db/supabase.client';
 import type { CreateFlashcardCommand, FlashcardDTO, PaginationParams, PaginatedResponse, UpdateFlashcardCommand, FlashcardReviewCommand, FlashcardGenerateCommand } from '../types';
 import { ErrorLogger } from '../utils/error-logger';
+import { OpenRouterService } from '../lib/openrouter.service';
 
 /**
  * Service for handling flashcard operations
@@ -449,25 +450,27 @@ export class FlashcardService {
   }
 
   /**
-   * Generates flashcards using AI (mocked implementation)
-   * @param generateData - The input data for generating flashcards
-   * @returns An array of generated flashcard DTOs
+   * Generates flashcards using AI based on the provided text
+   * @param generateData - The command containing the input text and optionally the model to use
+   * @returns Array of generated flashcard DTOs
    */
   async generateFlashcards(generateData: FlashcardGenerateCommand): Promise<FlashcardDTO[]> {
     try {
+      const modelToUse = generateData.model || 'openai/gpt-4o'; // Default to GPT-4o if no model specified
+      console.log(`🚀 Using OpenRouter with model ${modelToUse} to generate flashcards from text:`, generateData.input.substring(0, 50) + '...');
+      console.log(`📊 Input length: ${generateData.input.length} characters`);
+      
       // Create a generation record to track this batch of AI-generated flashcards
       const generationUuid = createHash('md5').update(`${Date.now()}-${Math.random()}`).digest('hex');
+      console.log(`🆔 Generated UUID for this batch: ${generationUuid}`);
       
-      // Mock implementation that simulates AI generation
-      // In a real implementation, this would call an AI service
-      
-      // First, create a "generation" record to track this batch
+      // Create a "generation" record to track this batch
       const { error: generationError } = await supabaseClient
         .from('generations')
         .insert({
           uuid: generationUuid,
           user_id: DEFAULT_USER_ID,
-          status: 'completed'
+          status: 'processing'
         });
       
       // If there's an RLS error, we can proceed without the generation record for development
@@ -475,109 +478,226 @@ export class FlashcardService {
       let finalGenerationId = null;
       if (generationError) {
         // Log the error but don't throw
+        console.error(`⚠️ Generation record creation error: ${generationError.message}`);
         ErrorLogger.logDatabaseError('insert_generation', generationError, {
           uuid: generationUuid
         });
         console.warn('Proceeding without generation record due to RLS policy restrictions');
       } else {
         finalGenerationId = generationUuid;
+        console.log(`✅ Generation record created with ID: ${finalGenerationId}`);
       }
       
-      // Mock some generated flashcards based on the input
-      const mockGenerate = (input: string, count: number) => {
-        const words = input.split(/\s+/).filter(word => word.length > 3);
-        const results: CreateFlashcardCommand[] = [];
-        
-        // Generate a random number of flashcards between 1 and 5 (or the specified count)
-        const numFlashcards = Math.min(count, Math.floor(Math.random() * 5) + 1);
-        
-        for (let i = 0; i < numFlashcards; i++) {
-          // Pick random words from the input to create front and back
-          const randomWordIndex = Math.floor(Math.random() * words.length);
-          const randomWord = words[randomWordIndex] || 'concept';
-          
-          results.push({
-            front: `What is the definition of "${randomWord}"?`,
-            back: `"${randomWord}" refers to ${input.substring(0, 100)}...`,
-            metoda_tworzna: 'AI'
-          });
+      // Initialize the OpenRouter service
+      console.log('🔄 Initializing OpenRouter service...');
+      const openRouterService = new OpenRouterService();
+      console.log('✅ OpenRouter service initialized');
+      
+      // Define the prompt for generating flashcards
+      const systemPrompt = `
+        You are an educational assistant that creates high-quality flashcards from provided content.
+        Follow these guidelines:
+        1. Create 3-5 flashcards based on the most important concepts in the provided text.
+        2. Each flashcard should have a concise question on the front (max 200 characters) and a clear answer on the back (max 500 characters).
+        3. Questions should be specific and test understanding, not just recall.
+        4. Answers should be comprehensive but concise.
+        5. Focus on key concepts, definitions, relationships, and principles.
+        6. Return ONLY the structured JSON array without any additional text.
+      `;
+      
+      // Configure the output schema for JSON response
+      const flashcardSchema = {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            front: { 
+              type: 'string', 
+              description: 'Question for the front of the flashcard (max 200 chars)' 
+            },
+            back: { 
+              type: 'string', 
+              description: 'Answer for the back of the flashcard (max 500 chars)' 
+            }
+          },
+          required: ['front', 'back']
         }
-        
-        return results;
       };
       
-      // Create a simulated delay to mimic AI processing time (500ms to 2000ms)
-      await new Promise(resolve => setTimeout(resolve, Math.random() * 1500 + 500));
-      
-      // Generate between 1 and 5 flashcards
-      const generatedFlashcards = mockGenerate(generateData.input, 5);
-      
-      // Create the flashcards in the database, using the generation ID
-      const flashcardRecords = generatedFlashcards.map(flashcard => {
-        const uuid = createHash('md5').update(`${DEFAULT_USER_ID}${flashcard.front}${flashcard.back}${Date.now()}`).digest('hex');
+      try {
+        // Get AI completion from OpenRouter
+        console.log(`🔄 Preparing to call OpenRouter API with ${modelToUse} model...`);
+        const response = await openRouterService.getChatCompletion({
+          model: modelToUse,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: generateData.input }
+          ],
+          temperature: 0.3, // Lower temperature for more consistent results
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: 'flashcardGenerator',
+              strict: true,
+              schema: flashcardSchema
+            }
+          }
+        });
         
-        return {
-          uuid,
-          user_id: DEFAULT_USER_ID,
-          generation_id: finalGenerationId,
-          przód: flashcard.front,
-          tył: flashcard.back,
-          metoda_tworzna: 'ai' as const,
-          status_recenzji: 'pending' as const,
-        };
-      });
-      
-      // Insert the flashcards into the database
-      const { data: createdFlashcards, error } = await supabaseClient
-        .from('flashcards')
-        .insert(flashcardRecords)
-        .select();
-      
-      if (error) {
-        ErrorLogger.logDatabaseError('insert_generated_flashcards', error, {
-          generationId: finalGenerationId,
-          recordCount: flashcardRecords.length
+        // Log the full response structure for debugging
+        console.log('📦 OpenRouter API response structure:', JSON.stringify(response, null, 2).substring(0, 500) + '...');
+        
+        console.log(`✅ Received response from OpenRouter API. Response ID: ${response?.id || 'undefined'}`);
+        console.log(`📊 Tokens used: ${response?.usage?.total_tokens || 'Unknown'} (${response?.usage?.prompt_tokens || 'Unknown'} prompt, ${response?.usage?.completion_tokens || 'Unknown'} completion)`);
+        
+        // Parse the response JSON
+        let generatedFlashcards: { front: string; back: string }[] = [];
+        try {
+          // Check if response has the expected structure
+          if (!response || !response.choices || !Array.isArray(response.choices) || response.choices.length === 0) {
+            console.error('❌ Invalid API response structure: missing or empty choices array');
+            console.error('Full response:', JSON.stringify(response));
+            throw new Error('Invalid API response structure');
+          }
+          
+          const firstChoice = response.choices[0];
+          if (!firstChoice || !firstChoice.message) {
+            console.error('❌ Invalid API response: first choice is missing or has no message property');
+            throw new Error('Invalid choice in API response');
+          }
+          
+          const content = firstChoice.message.content;
+          console.log(`📝 Raw content from API: ${content ? content.substring(0, 100) + '...' : 'No content returned'}`);
+          
+          if (!content) {
+            console.error('❌ No content in API response message');
+            throw new Error('No content in API response');
+          }
+          
+          try {
+            generatedFlashcards = JSON.parse(content);
+            console.log(`✅ Successfully parsed ${generatedFlashcards.length} flashcards from response`);
+            
+            // Validate the parsed data
+            if (!Array.isArray(generatedFlashcards) || generatedFlashcards.length === 0) {
+              throw new Error('Parsed content is not an array or is empty');
+            }
+            
+            // Verify each flashcard has the required structure
+            for (const card of generatedFlashcards) {
+              if (!card.front || !card.back) {
+                throw new Error('Flashcard missing required front or back property');
+              }
+            }
+          } catch (jsonError) {
+            console.error(`❌ Failed to parse content as JSON: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`);
+            console.error('Content to parse:', content);
+            throw new Error(`Failed to parse AI-generated content as JSON: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`);
+          }
+        } catch (parseError) {
+          console.error(`❌ Error processing API response: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+          ErrorLogger.logError(parseError, {
+            operation: 'parseGeneratedFlashcards',
+            responseStructure: JSON.stringify(response)
+          });
+          throw new Error('Failed to parse AI-generated flashcards');
+        }
+        
+        // Update generation status to completed
+        if (finalGenerationId) {
+          await supabaseClient
+            .from('generations')
+            .update({ status: 'completed' })
+            .eq('uuid', finalGenerationId);
+        }
+        
+        // Convert the generated flashcards to the format expected by the database
+        const flashcardRecords = generatedFlashcards.map(flashcard => {
+          const uuid = createHash('md5').update(`${DEFAULT_USER_ID}${flashcard.front}${flashcard.back}${Date.now()}`).digest('hex');
+          
+          return {
+            uuid,
+            user_id: DEFAULT_USER_ID,
+            generation_id: finalGenerationId,
+            przód: flashcard.front,
+            tył: flashcard.back,
+            metoda_tworzna: 'ai' as const,
+            status_recenzji: 'pending' as const,
+          };
         });
-        throw new Error(`Failed to create generated flashcards: ${error.message}`);
-      }
-      
-      if (!createdFlashcards || createdFlashcards.length === 0) {
-        const error = new Error('No flashcards were created');
-        ErrorLogger.logDatabaseError('insert_generated_flashcards_empty', error, {
-          generationId: finalGenerationId
+        
+        // Insert the flashcards into the database
+        const { data: createdFlashcards, error } = await supabaseClient
+          .from('flashcards')
+          .insert(flashcardRecords)
+          .select();
+        
+        if (error) {
+          ErrorLogger.logDatabaseError('insert_generated_flashcards', error, {
+            generationId: finalGenerationId,
+            recordCount: flashcardRecords.length
+          });
+          throw new Error(`Failed to create generated flashcards: ${error.message}`);
+        }
+        
+        if (!createdFlashcards || createdFlashcards.length === 0) {
+          const error = new Error('No flashcards were created');
+          ErrorLogger.logDatabaseError('insert_generated_flashcards_empty', error, {
+            generationId: finalGenerationId
+          });
+          throw error;
+        }
+        
+        // Map database records to DTOs
+        const flashcardDTOs: FlashcardDTO[] = createdFlashcards.map(card => ({
+          uuid: card.uuid,
+          userId: card.user_id,
+          createdAt: card.created_at,
+          generationId: card.generation_id,
+          front: card.przód,
+          back: card.tył,
+          method: card.metoda_tworzna,
+          status: card.status_recenzji,
+        }));
+        
+        return flashcardDTOs;
+        
+      } catch (aiError: unknown) {
+        // Update generation status to failed
+        if (finalGenerationId) {
+          await supabaseClient
+            .from('generations')
+            .update({ status: 'failed' })
+            .eq('uuid', finalGenerationId);
+        }
+        
+        // Handle API timeouts or other OpenRouter issues
+        ErrorLogger.logError(aiError, {
+          operation: 'openRouterGeneration',
+          inputLength: generateData.input.length
         });
-        throw error;
+        
+        // Check specifically for token limit errors
+        if (aiError instanceof Error) {
+          const errorMsg = aiError.message.toLowerCase();
+          if (errorMsg.includes('credit limit') || 
+              errorMsg.includes('more credits') || 
+              errorMsg.includes('can only afford') ||
+              errorMsg.includes('token limit')) {
+            console.error('🔴 Token limit error detected:', aiError.message);
+            throw aiError; // Preserve the original error
+          }
+          
+          // If it's a timeout or rate limit error, throw a custom error
+          if (errorMsg.includes('timeout') || aiError.name === 'RateLimitError') {
+            throw new Error('AI generation timeout');
+          }
+        }
+        
+        throw aiError;
       }
-      
-      // Map database records to DTOs
-      const flashcardDTOs: FlashcardDTO[] = createdFlashcards.map(card => ({
-        uuid: card.uuid,
-        userId: card.user_id,
-        createdAt: card.created_at,
-        generationId: card.generation_id,
-        front: card.przód,
-        back: card.tył,
-        method: card.metoda_tworzna,
-        status: card.status_recenzji,
-      }));
-      
-      return flashcardDTOs;
     } catch (error) {
-      // Simulate a timeout error occasionally (10% chance)
-      if (Math.random() < 0.1) {
-        const timeoutError = new Error('AI generation timeout');
-        
-        // Log the error with appropriate context
-        ErrorLogger.logError(timeoutError, {
-          operation: 'generateFlashcards',
-          inputLength: generateData.input.length,
-          errorType: 'TIMEOUT'
-        });
-        
-        throw timeoutError;
-      }
-      
-      // Log any other errors
+      // Log the error with appropriate context
       ErrorLogger.logError(error, {
         operation: 'generateFlashcards',
         inputLength: generateData.input.length

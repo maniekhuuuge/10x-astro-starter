@@ -17,6 +17,11 @@ const AIGenerationView = () => {
   const [isSuccess, setIsSuccess] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<string | null>(null);
   const [generatedFlashcards, setGeneratedFlashcards] = useState<number>(0);
+  const [errorDetails, setErrorDetails] = useState<{
+    requestedTokens?: string;
+    availableTokens?: string;
+    details?: string;
+  } | null>(null);
 
   // Funkcja generująca przykładowe fiszki na podstawie tekstu wejściowego
   const generateExampleFlashcards = (input: string): CreateFlashcardCommand[] => {
@@ -170,21 +175,40 @@ const AIGenerationView = () => {
   const handleSubmit = async (data: AIGenerationData) => {
     setIsLoading(true);
     setError(null);
-    setIsSuccess(false);
-    setGenerationStatus('loading');
+    setErrorDetails(null);
+    setGenerationStatus('processing');
     setGeneratedFlashcards(0);
 
     try {
-      // W rzeczywistej implementacji wywołalibyśmy API
-      // const response = await fetch('/api/flashcards/generate', {...});
-      // Tymczasowo używamy naszego mocka
-      const generationResult = await mockGenerateFlashcards(data.input);
-      
-      // Generujemy przykładowe fiszki na podstawie tekstu wejściowego
-      const exampleFlashcards = generateExampleFlashcards(data.input);
-      
-      // Zapisujemy wygenerowane fiszki w bazie danych
-      await saveGeneratedFlashcards(exampleFlashcards);
+      // Use the actual API endpoint
+      const response = await fetch('/api/flashcards/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ input: data.input }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        
+        // Check for credit limit error
+        if (response.status === 402 && errorData.code === 'CREDIT_LIMIT_EXCEEDED') {
+          setGenerationStatus('credit_limit');
+          setError(errorData.message || 'Limit kredytów OpenRouter został przekroczony.');
+          setErrorDetails({
+            requestedTokens: errorData.requestedTokens,
+            availableTokens: errorData.availableTokens,
+            details: errorData.details
+          });
+          return;
+        }
+        
+        throw new Error(errorData.error || errorData.message || 'Wystąpił błąd podczas generowania fiszek');
+      }
+
+      const generatedFlashcards = await response.json();
+      setGeneratedFlashcards(generatedFlashcards.length);
       
       setIsSuccess(true);
       setGenerationStatus('success');
@@ -193,8 +217,34 @@ const AIGenerationView = () => {
         setGenerationStatus('timeout');
         setError('Generowanie fiszek przekroczyło limit czasu. Spróbuj z krótszym tekstem.');
       } else {
-        setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd');
-        setGenerationStatus('error');
+        // Check if this is a token limit error that wasn't caught earlier
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const errorLower = errorMessage.toLowerCase();
+        
+        if (errorLower.includes('credit') || 
+            errorLower.includes('token') ||
+            errorLower.includes('can only afford') ||
+            errorLower.includes('more credits')) {
+          
+          // Try to extract token counts
+          const tokenMatch = errorMessage.match(/(\d+) tokens, but can only afford (\d+)/);
+          const requestedTokens = tokenMatch ? tokenMatch[1] : undefined;
+          const availableTokens = tokenMatch ? tokenMatch[2] : undefined;
+          
+          console.error('Token limit error detected in frontend:', errorMessage);
+          
+          setGenerationStatus('credit_limit');
+          setError(errorMessage);
+          setErrorDetails({
+            requestedTokens,
+            availableTokens,
+            details: tokenMatch ? `You requested ${requestedTokens} tokens, but only have ${availableTokens} available.` : 'Insufficient tokens for this operation.'
+          });
+          
+        } else {
+          setError(err instanceof Error ? err.message : 'Wystąpił nieznany błąd');
+          setGenerationStatus('error');
+        }
       }
     } finally {
       setIsLoading(false);
@@ -216,7 +266,27 @@ const AIGenerationView = () => {
     <div className="space-y-8 max-w-4xl mx-auto">
       {error && (
         <div className="mb-6 p-4 border border-destructive bg-destructive/10 text-destructive rounded-md">
-          <p className="mb-4">{error}</p>
+          <p className="mb-4 font-medium">{error}</p>
+          
+          {generationStatus === 'credit_limit' && (
+            <div className="mb-4">
+              {errorDetails?.details && (
+                <p className="mb-2 text-sm">{errorDetails.details}</p>
+              )}
+              
+              <div className="bg-background/80 p-3 rounded mb-4 text-sm font-mono">
+                <p>Requested tokens: {errorDetails?.requestedTokens || 'Unknown'}</p>
+                <p>Available tokens: {errorDetails?.availableTokens || 'Insufficient'}</p>
+              </div>
+              
+              <p className="mb-4">Aby kontynuować korzystanie z generatora fiszek, możesz:</p>
+              <ul className="list-disc pl-5 mb-4">
+                <li>Spróbować z <strong>krótszym tekstem</strong> (około {Math.floor(Number(errorDetails?.availableTokens || 1000) / 2)} znaków)</li>
+                <li>Doładować konto OpenRouter <a href="https://openrouter.ai/settings/credits" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">tutaj</a></li>
+              </ul>
+            </div>
+          )}
+          
           <Button 
             variant="outline" 
             onClick={handleTryAgain} 
@@ -262,11 +332,12 @@ const AIGenerationView = () => {
       )}
 
       <div className="mt-6 p-4 border rounded-md bg-muted/20">
-        <h3 className="text-sm font-medium mb-2">Testowanie interfejsu generowania AI:</h3>
+        <h3 className="text-sm font-medium mb-2">Informacje o generowaniu fiszek:</h3>
         <ul className="text-sm text-muted-foreground space-y-1">
-          <li>• Wprowadź dowolny tekst, aby wygenerować przykładowe fiszki</li>
-          <li>• Użyj słowa "error" w tekście, aby zasymulować błąd</li>
-          <li>• Użyj słowa "timeout" lub długiego tekstu, aby zasymulować timeout</li>
+          <li>• Wprowadź tekst, z którego AI wygeneruje fiszki</li>
+          <li>• Maksymalna długość tekstu to 10,000 znaków</li>
+          <li>• Fiszki są generowane przy użyciu OpenRouter i modelu GPT-4o</li>
+          <li>• Proces może potrwać kilka sekund</li>
         </ul>
       </div>
     </div>

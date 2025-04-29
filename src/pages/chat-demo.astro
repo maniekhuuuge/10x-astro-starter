@@ -1,0 +1,61 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ChatInterface from '../components/chat/ChatInterface';
+import InfoExtractor from '../components/chat/InfoExtractor';
+---
+
+<Layout title="OpenRouter Chat Demo">
+  <main class="container mx-auto py-8 px-4">
+    <h1 class="text-3xl font-bold mb-8 text-center">OpenRouter API Demo</h1>
+    
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div>
+        <h2 class="text-2xl font-bold mb-4">Chat Interface</h2>
+        <p class="text-gray-700 dark:text-gray-300 mb-6">
+          This demo showcases the basic chat functionality using the OpenRouter API.
+          You can chat with various AI models like GPT-4o.
+        </p>
+        <div class="border rounded-lg p-6 bg-white dark:bg-gray-800 shadow-md">
+          <ChatInterface client:load />
+        </div>
+      </div>
+      
+      <div>
+        <h2 class="text-2xl font-bold mb-4">Information Extractor</h2>
+        <p class="text-gray-700 dark:text-gray-300 mb-6">
+          This demo shows how to use JSON schema to extract structured information from text.
+          Try entering a text with personal details to see it extract the data.
+        </p>
+        <div class="border rounded-lg p-6 bg-white dark:bg-gray-800 shadow-md">
+          <InfoExtractor client:load />
+        </div>
+      </div>
+    </div>
+    
+    <div class="mt-12 p-6 border rounded-lg bg-gray-50 dark:bg-gray-900">
+      <h2 class="text-2xl font-bold mb-4">About This Demo</h2>
+      <p class="text-gray-700 dark:text-gray-300 mb-4">
+        This page demonstrates the integration of the OpenRouter service into an Astro application.
+        The implementation uses:
+      </p>
+      <ul class="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300">
+        <li>A TypeScript service class for API communication</li>
+        <li>Astro API endpoints for backend processing</li>
+        <li>React components for the frontend interface</li>
+        <li>JSON schema for structured data extraction</li>
+      </ul>
+      
+      <div class="mt-6">
+        <h3 class="text-xl font-bold mb-2">Setup Requirements</h3>
+        <p class="text-gray-700 dark:text-gray-300 mb-2">
+          To use this demo with your own OpenRouter API key:
+        </p>
+        <ol class="list-decimal list-inside space-y-2 text-gray-700 dark:text-gray-300">
+          <li>Get an API key from <a href="https://openrouter.ai/keys" class="text-blue-600 hover:underline">OpenRouter</a></li>
+          <li>Add the key to your .env file as <code class="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">OPENROUTER_API_KEY=your_key_here</code></li>
+          <li>Restart the development server</li>
+        </ol>
+      </div>
+    </div>
+  </main>
+</Layout> 

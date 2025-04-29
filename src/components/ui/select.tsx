@@ -101,7 +101,7 @@ const SelectContent = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "absolute z-50 min-w-[8rem] w-full overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md animate-in fade-in-80",
+      "absolute z-50 min-w-[8rem] w-full overflow-hidden rounded-md border bg-white text-popover-foreground shadow-md animate-in fade-in-80",
       className
     )}
     {...props}
